@@ -1,0 +1,5 @@
+# single-machine training
+python lazyconfig_train_net.py --config-file configs/mimdet/mimdet_vit_base_mask_rcnn_fpn_sr_0p5_800_1333_4xdec_coco_3x.py --num-gpus 1 mae_checkpoint.path=models/weights/mae_pretrain_vit_base_full.pth
+
+# inference
+python lazyconfig_train_net.py --config-file configs/mimdet/mimdet_vit_base_mask_rcnn_fpn_sr_0p5_800_1333_4xdec_coco_3x.py --num-gpus 1 --eval-only train.init_checkpoint=models/weights/mimdet_vit_base_mask_rcnn_fpn_sr_0p5_800_1333_4xdec_coco_3x.pth

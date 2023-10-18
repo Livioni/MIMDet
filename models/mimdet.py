@@ -85,7 +85,7 @@ class ConvStem(nn.Module):
         outputs = []
         for i, stage in enumerate(self.proj):
             if self.checkpointing and x.requires_grad:
-                x = cp.checkpoint(stage, x)
+                x = cp.checkpoint(stage, x, use_reentrant=False)
             else:
                 x = stage(x)
             if i >= 1:
@@ -233,7 +233,7 @@ class MIMDetEncoder(nn.Module):
 
         if self.checkpointing and x.requires_grad:
             for blk in self.blocks:
-                x = cp.checkpoint(blk, x)
+                x = cp.checkpoint(blk, x, use_reentrant=False)
         else:
             for blk in self.blocks:
                 x = blk(x)
@@ -348,12 +348,12 @@ class MIMDetDecoder(nn.Module):
         x = x + pos_embed
         if self.checkpointing and x.requires_grad:
             for blk in self.decoder_blocks:
-                x = cp.checkpoint(blk, x)
+                x = cp.checkpoint(blk, x, use_reentrant=False)
         else:
             for blk in self.decoder_blocks:
                 x = blk(x)
         if self.checkpointing and x.requires_grad:
-            x = cp.checkpoint(self.decoder_norm, x)
+            x = cp.checkpoint(self.decoder_norm, x, use_reentrant=False)
         else:
             x = self.decoder_norm(x)
         return x.transpose(1, 2).reshape(B, C, *new_size)

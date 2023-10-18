@@ -9,3 +9,5 @@ dist/
 
 # d2 output dir
 output
+.vscode
+*.pth

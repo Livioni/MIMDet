@@ -660,7 +660,7 @@ class BenchmarkingViTDet(VisionTransformer, Backbone):
             # window attention
             if self.with_cp:
                 for block in self.blocks[i : i + len(self.blocks) // 4 - 1]:
-                    x = cp.checkpoint(block, x, self.windowed_rel_pos_bias())
+                    x = cp.checkpoint(block, x, self.windowed_rel_pos_bias(),use_reentrant=False)
             else:
                 for block in self.blocks[i : i + len(self.blocks) // 4 - 1]:
                     x = block(x, self.windowed_rel_pos_bias())
@@ -681,6 +681,7 @@ class BenchmarkingViTDet(VisionTransformer, Backbone):
                     self.blocks[i + len(self.blocks) // 4 - 1],
                     x,
                     self.global_rel_pos_bias(),
+                    use_reentrant=False
                 )
             else:
                 x = self.blocks[i + len(self.blocks) // 4 - 1](
