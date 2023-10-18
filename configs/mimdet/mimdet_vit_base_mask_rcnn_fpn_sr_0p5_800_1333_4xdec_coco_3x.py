@@ -20,7 +20,7 @@ from detectron2.modeling.roi_heads import (
     StandardROIHeads,
 )
 from detectron2.data.datasets.coco import load_coco_json
-
+from detectron2.evaluation import COCOEvaluator
 from models import MIMDetBackbone, MIMDetDecoder, MIMDetEncoder
 from detectron2.data import DatasetCatalog, MetadataCatalog
 
@@ -52,24 +52,19 @@ PREDEFINED_SPLITS_DATASET = {
     "MOT15_val": (VAL_PATH, VAL_JSON),
 }
 
-def plain_register_dataset():
-    #训练集
-    DatasetCatalog.register("MOT15_train", lambda: load_coco_json(TRAIN_JSON, TRAIN_PATH))
-    MetadataCatalog.get("MOT15_train").set(thing_classes=CLASS_NAMES,  # 可以选择开启，但是不能显示中文，这里需要注意，中文的话最好关闭
-                                                    evaluator_type='coco', # 指定评估方式
-                                                    json_file=TRAIN_JSON,
-                                                    image_root=TRAIN_PATH)
+#训练集
+DatasetCatalog.register("MOT15_train", lambda: load_coco_json(TRAIN_JSON, TRAIN_PATH))
+MetadataCatalog.get("MOT15_train").set(thing_classes=CLASS_NAMES,  # 可以选择开启，但是不能显示中文，这里需要注意，中文的话最好关闭
+                                                json_file=TRAIN_JSON,
+                                                image_root=TRAIN_PATH)
 
-    #DatasetCatalog.register("coco_my_val", lambda: load_coco_json(VAL_JSON, VAL_PATH, "coco_2017_val"))
-    #验证/测试集
-    DatasetCatalog.register("MOT15_val", lambda: load_coco_json(VAL_JSON, VAL_PATH))
-    MetadataCatalog.get("MOT15_val").set(thing_classes=CLASS_NAMES, # 可以选择开启，但是不能显示中文，这里需要注意，中文的话最好关闭
-                                                evaluator_type='coco', # 指定评估方式
-                                                json_file=VAL_JSON,
-                                                image_root=VAL_PATH)
+#DatasetCatalog.register("coco_my_val", lambda: load_coco_json(VAL_JSON, VAL_PATH, "coco_2017_val"))
+#验证/测试集
+DatasetCatalog.register("MOT15_val", lambda: load_coco_json(VAL_JSON, VAL_PATH))
+MetadataCatalog.get("MOT15_val").set(thing_classes=CLASS_NAMES, # 可以选择开启，但是不能显示中文，这里需要注意，中文的话最好关闭
+                                            json_file=VAL_JSON,
+                                            image_root=VAL_PATH)
 
-
-plain_register_dataset()
 model = L(GeneralizedRCNNImageListForward)(
     lsj_postprocess=False,
     backbone=L(FPN)(
@@ -186,7 +181,7 @@ optimizer = L(torch.optim.AdamW)(
 # dataloader
 dataloader.train.dataset.names = ("MOT15_train",)
 dataloader.test.dataset.names = ("MOT15_val",)
-dataloader.train.mapper.use_instance_mask = True
+dataloader.train.mapper.use_instance_mask = False
 dataloader.train.mapper.augmentations = [
     L(T.RandomFlip)(horizontal=True),
     L(T.RandomApply)(
@@ -209,6 +204,11 @@ dataloader.train.mapper.augmentations = [
 dataloader.test.mapper.augmentations = [
     L(T.ResizeShortestEdge)(short_edge_length=800, max_size=1333),
 ]
+dataloader.evaluator = L(COCOEvaluator)(
+    dataset_name=("MOT15_val"),
+    output_dir="${train.output_dir}/eval",
+    tasks = ('bbox',),
+)
 
 # batch size, lr & schedules
 dataloader.train.total_batch_size = 2
