@@ -16,9 +16,10 @@ from detectron2.modeling.proposal_generator import RPN, StandardRPNHead
 from detectron2.modeling.roi_heads import (
     FastRCNNConvFCHead,
     FastRCNNOutputLayers,
-    MaskRCNNConvUpsampleHead,
+    # MaskRCNNConvUpsampleHead,
     StandardROIHeads,
 )
+from detectron2.data.datasets import register_coco_instances
 from detectron2.data.datasets.coco import load_coco_json
 from detectron2.evaluation import COCOEvaluator
 from models import MIMDetBackbone, MIMDetDecoder, MIMDetEncoder
@@ -56,6 +57,7 @@ PREDEFINED_SPLITS_DATASET = {
 DatasetCatalog.register("MOT15_train", lambda: load_coco_json(TRAIN_JSON, TRAIN_PATH))
 MetadataCatalog.get("MOT15_train").set(thing_classes=CLASS_NAMES,  # 可以选择开启，但是不能显示中文，这里需要注意，中文的话最好关闭
                                                 json_file=TRAIN_JSON,
+                                                evaluator_type='coco',
                                                 image_root=TRAIN_PATH)
 
 #DatasetCatalog.register("coco_my_val", lambda: load_coco_json(VAL_JSON, VAL_PATH, "coco_2017_val"))
@@ -63,6 +65,7 @@ MetadataCatalog.get("MOT15_train").set(thing_classes=CLASS_NAMES,  # 可以选�
 DatasetCatalog.register("MOT15_val", lambda: load_coco_json(VAL_JSON, VAL_PATH))
 MetadataCatalog.get("MOT15_val").set(thing_classes=CLASS_NAMES, # 可以选择开启，但是不能显示中文，这里需要注意，中文的话最好关闭
                                             json_file=VAL_JSON,
+                                            evaluator_type='coco',
                                             image_root=VAL_PATH)
 
 model = L(GeneralizedRCNNImageListForward)(
@@ -121,7 +124,7 @@ model = L(GeneralizedRCNNImageListForward)(
         nms_thresh=0.7,
     ),
     roi_heads=L(StandardROIHeads)(
-        num_classes=80,
+        num_classes=1,
         batch_size_per_image=512,
         positive_fraction=0.25,
         proposal_matcher=L(Matcher)(
@@ -145,18 +148,18 @@ model = L(GeneralizedRCNNImageListForward)(
             box2box_transform=L(Box2BoxTransform)(weights=(10, 10, 5, 5)),
             num_classes="${..num_classes}",
         ),
-        mask_in_features=["p2", "p3", "p4", "p5"],
-        mask_pooler=L(ROIPooler)(
-            output_size=14,
-            scales=(1.0 / 4, 1.0 / 8, 1.0 / 16, 1.0 / 32),
-            sampling_ratio=0,
-            pooler_type="ROIAlignV2",
-        ),
-        mask_head=L(MaskRCNNConvUpsampleHead)(
-            input_shape=ShapeSpec(channels=256, width=14, height=14),
-            num_classes="${..num_classes}",
-            conv_dims=[256, 256, 256, 256, 256],
-        ),
+        # mask_in_features=["p2", "p3", "p4", "p5"],
+        # mask_pooler=L(ROIPooler)(
+        #     output_size=14,
+        #     scales=(1.0 / 4, 1.0 / 8, 1.0 / 16, 1.0 / 32),
+        #     sampling_ratio=0,
+        #     pooler_type="ROIAlignV2",
+        # ),
+        # mask_head=L(MaskRCNNConvUpsampleHead)(
+        #     input_shape=ShapeSpec(channels=256, width=14, height=14),
+        #     num_classes="${..num_classes}",
+        #     conv_dims=[256, 256, 256, 256, 256],
+        # ),
     ),
     pixel_mean=[123.675, 116.280, 103.530],
     pixel_std=[58.395, 57.120, 57.375],
@@ -229,8 +232,8 @@ model.proposal_generator.head.conv_dims = [-1, -1]
 model.roi_heads.box_head.conv_dims = [256, 256, 256, 256]
 model.roi_heads.box_head.fc_dims = [1024]
 # following the convolutions in the standard mask head with syncbn
-model.roi_heads.box_head.conv_norm = (
-    model.roi_heads.mask_head.conv_norm
-) = lambda c: NaiveSyncBatchNorm(c, stats_mode="N")
+# model.roi_heads.box_head.conv_norm = (
+#     model.roi_heads.mask_head.conv_norm
+# ) = lambda c: NaiveSyncBatchNorm(c, stats_mode="N")
 
 train.output_dir = "output/mimdet_vit_base_mask_rcnn_fpn_sr_0p5_800_1333_4xdec_coco_3x"

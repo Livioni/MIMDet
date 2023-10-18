@@ -41,6 +41,10 @@ def do_test(cfg, model):
         )
         print_csv_format(ret)
         return ret
+    
+output_pool = []    
+def hook(module, input, output):
+    output_pool.append(output.shape)
 
 def do_inference(args, model):
     image = cv2.imread(args.input)
@@ -48,6 +52,17 @@ def do_inference(args, model):
     img_tensor = torch.as_tensor(image.astype("float32").transpose(2,0,1))
     model_input = [{'image': img_tensor}]
     model.eval()
+    input_pool = []
+
+    layers_to_hook = [model.backbone.fpn_output2,
+                      model.backbone.fpn_output3,
+                      model.backbone.fpn_output4,
+                      model.backbone.fpn_output5]  # 用实际的层名替换
+    handles = []
+    for layer in layers_to_hook:
+        handle = layer.register_forward_hook(hook)
+        handles.append(handle)
+
     with torch.no_grad():
         outputs = model(model_input)
     v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("coco_val_2017"), scale=1.2)
@@ -55,13 +70,16 @@ def do_inference(args, model):
         v = v.draw_instance_predictions(output["instances"].to("cpu"))
         result_img = v.get_image()[:, :, ::-1]
         #print inference result
-        print("Instance Class:",output["instances"].pred_classes)
-        print("Instance Bboxes:",output["instances"].pred_boxes)
-        print("Instance Confidence:",output["instances"].scores)
+        # print("Instance Class:",output["instances"].pred_classes)
+        # print("Instance Bboxes:",output["instances"].pred_boxes)
+        # print("Instance Confidence:",output["instances"].scores)
         # 显示可视化结果
         # cv2.imshow("Visualization", result_img)
         image_name = args.input.split("/")[-1]
         cv2.imwrite(args.output + image_name,result_img)
+    print("output_pool:",output_pool)
+    for handle in handles:
+        handle.remove()
     return
 
 def do_train(args, cfg):
