@@ -8,10 +8,14 @@ few common configuration parameters currently defined in "configs/common/train.p
 To add more complicated training logic, you can easily add other configs
 in the config file and implement a new train_net.py to handle them.
 """
-import logging
+import logging,cv2
+import torch
+import detectron2.data.transforms as T
 
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import LazyConfig, instantiate
+from detectron2.utils.visualizer import Visualizer
+from detectron2.data import MetadataCatalog
 from detectron2.engine import (
     AMPTrainer,
     SimpleTrainer,
@@ -38,6 +42,27 @@ def do_test(cfg, model):
         print_csv_format(ret)
         return ret
 
+def do_inference(args, model):
+    image = cv2.imread(args.input)
+    image = T.ResizeShortestEdge(short_edge_length=800, max_size=1333).get_transform(image).apply_image(image)
+    img_tensor = torch.as_tensor(image.astype("float32").transpose(2,0,1))
+    model_input = [{'image': img_tensor}]
+    model.eval()
+    with torch.no_grad():
+        outputs = model(model_input)
+    v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("coco_val_2017"), scale=1.2)
+    for output in outputs:
+        v = v.draw_instance_predictions(output["instances"].to("cpu"))
+        result_img = v.get_image()[:, :, ::-1]
+        #print inference result
+        print("Instance Class:",output["instances"].pred_classes)
+        print("Instance Bboxes:",output["instances"].pred_boxes)
+        print("Instance Confidence:",output["instances"].scores)
+        # 显示可视化结果
+        # cv2.imshow("Visualization", result_img)
+        image_name = args.input.split("/")[-1]
+        cv2.imwrite(args.output + image_name,result_img)
+    return
 
 def do_train(args, cfg):
     """
@@ -99,7 +124,6 @@ def do_train(args, cfg):
         start_iter = 0
     trainer.train(start_iter, cfg.train.max_iter)
 
-
 def main(args):
     cfg = LazyConfig.load(args.config_file)
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
@@ -111,6 +135,12 @@ def main(args):
         model = create_ddp_model(model)
         DetectionCheckpointer(model).load(cfg.train.init_checkpoint)
         print(do_test(cfg, model))
+    elif args.inference:
+        model = instantiate(cfg.model)  # returns a torch.nn.Module
+        model.to(cfg.train.device)
+        model = create_ddp_model(model)
+        DetectionCheckpointer(model).load(cfg.train.init_checkpoint)
+        do_inference(args, model)
     else:
         do_train(args, cfg)
 
@@ -120,6 +150,17 @@ if __name__ == "__main__":
     parser.add_argument("--node_rank", type=int, default=0)
     parser.add_argument("--master_addr", default="")
     parser.add_argument("--master_port", default="")
+    parser.add_argument("--inference", action="store_true", help="perform inference only")
+    parser.add_argument(
+        "--input",
+        type=str,
+        help="A list of space separated input images; "
+        "or a single glob pattern such as 'directory/*.jpg'",
+    )
+    parser.add_argument(
+        "--output",
+        help="A file or directory to save output visualizations. "
+    )
     args = parser.parse_args()
     args.machine_rank = args.node_rank
     if args.master_addr or args.master_port:
